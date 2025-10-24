@@ -7,7 +7,9 @@ app = Flask(__name__)
 
 # Конфигурация
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-8f3a7976db454796890e1fb2c4c38553')
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8392042106:AAF9kqjIxgClFTilhenMe8NbSwI2GQqBJdA')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+if not TELEGRAM_TOKEN:
+    print("❌ TELEGRAM_BOT_TOKEN not set!")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
