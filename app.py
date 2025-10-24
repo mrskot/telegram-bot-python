@@ -3,6 +3,8 @@ import requests
 import os
 import base64
 import logging
+from PIL import Image  # ← ДОБАВИТЬ ЭТО
+import io              # ← ДОБАВИТЬ ЭТО
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -12,6 +14,27 @@ app = Flask(__name__)
 # Конфигурация
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+
+# ↓ ДОБАВИТЬ ЭТУ ФУНКЦИЮ ПРЯМО ЗДЕСЬ ↓
+def resize_image(image_bytes, max_size=(800, 800)):
+    """Уменьшаем размер изображения"""
+    try:
+        # Открываем изображение
+        image = Image.open(io.BytesIO(image_bytes))
+        
+        # Уменьшаем размер
+        image.thumbnail(max_size, Image.Resampling.LANCZOS)
+        
+        # Конвертируем обратно в bytes
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=85, optimize=True)
+        
+        logging.info(f"📐 Image resized: {len(image_bytes)} -> {len(output.getvalue())} bytes")
+        return output.getvalue()
+        
+    except Exception as e:
+        logging.error(f"❌ Image resize error: {e}")
+        return image_bytes  # Возвращаем оригинал если ошибка
 
 def download_telegram_file(file_id):
     """Скачиваем файл из Telegram"""
