@@ -19,31 +19,36 @@ def webhook():
     try:
         logging.info("🔔 WEBHOOK CALLED!")
         data = request.json
-        logging.info(f"📨 Update ID: {data.get('update_id')}")
         
-        # Проверяем токен
-        if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == 'xxx':
-            logging.error("❌ ERROR: TELEGRAM_TOKEN not configured!")
-            return jsonify({"status": "error", "message": "Token not configured"}), 500
-            
         if 'message' in data:
             user = data['message'].get('from', {})
             logging.info(f"💬 Message from: {user.get('first_name')} (ID: {user.get('id')})")
             
             if 'photo' in data['message']:
                 logging.info("🖼️ Photo received!")
-                return jsonify({"status": "success", "message": "Photo received!"})
+                
+                # Получаем самую большую версию фото (последнюю в массиве)
+                photo = data['message']['photo'][-1]
+                file_id = photo['file_id']
+                logging.info(f"📸 File ID: {file_id}")
+                
+                # Здесь будет логика скачивания и обработки фото
+                return jsonify({
+                    "status": "success", 
+                    "message": "Фото получено! Обработка будет добавлена.",
+                    "file_id": file_id
+                })
+                
             else:
                 text = data['message'].get('text', '')
                 logging.info(f"📝 Text: {text}")
-                return jsonify({"status": "success", "message": f"Text received: {text}"})
+                return jsonify({"status": "success", "message": f"Text: {text}"})
         
         return jsonify({"status": "success"})
         
     except Exception as e:
         logging.error(f"❌ Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
 @app.route('/health', methods=['GET'])
 def health():
     """Проверка работы сервера"""
