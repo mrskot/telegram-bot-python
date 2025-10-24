@@ -2,15 +2,12 @@ from flask import Flask, request, jsonify
 import requests
 import os
 import base64
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = Flask(__name__)
 
 # Конфигурация
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-8f3a7976db454796890e1fb2c4c38553')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8392042106:AAF9kqjIxgClFTilhenMe8NbSwI2GQqBJdA')
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
