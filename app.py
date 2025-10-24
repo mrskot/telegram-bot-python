@@ -53,47 +53,32 @@ def process_with_deepseek(image_bytes):
         # Кодируем в base64
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
         
-        # Отправляем в DeepSeek
-        deepseek_response = requests.post(
+        # ВАЖНО: Используем другой формат - только текстовый промпт с ссылкой
+        response = requests.post(
             'https://api.deepseek.com/chat/completions',
             headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}'},
             json={
                 'model': 'deepseek-chat',
                 'messages': [{
                     'role': 'user',
-                    'content': [
-                        {
-                            'type': 'text',
-                            'text': 'Распознай документ и верни ТОЛЬКО JSON: {"участок":"значение","изделие":"значение","номер":"значение","дата":"значение"}. Если поле не найдено - null.'
-                        },
-                        {
-                            'type': 'image_url',
-                            'image_url': {
-                                'url': f'data:image/jpeg;base64,{base64_image}'
-                            }
-                        }
-                    ]
+                    'content': f'Распознай документ на этом изображении: data:image/jpeg;base64,{base64_image} и верни ТОЛЬКО JSON: {{"участок":"значение","изделие":"значение","номер":"значение","дата":"значение"}}. Если поле не найдено - null.'
                 }],
                 'temperature': 0.1,
                 'max_tokens': 1000
             }
         )
         
-        if deepseek_response.status_code == 200:
-            result = deepseek_response.json()
+        if response.status_code == 200:
+            result = response.json()
             logging.info(f"✅ DeepSeek response received")
             
-            # Извлекаем текст ответа
             if 'choices' in result and len(result['choices']) > 0:
                 message_content = result['choices'][0]['message']['content']
                 logging.info(f"📄 DeepSeek content: {message_content}")
                 return message_content
-            else:
-                logging.error(f"❌ No choices in DeepSeek response: {result}")
-                return None
-        else:
-            logging.error(f"❌ DeepSeek API error: {deepseek_response.status_code} - {deepseek_response.text}")
-            return None
+            
+        logging.error(f"❌ DeepSeek API error: {response.status_code} - {response.text}")
+        return None
             
     except Exception as e:
         logging.error(f"❌ DeepSeek processing error: {e}")
