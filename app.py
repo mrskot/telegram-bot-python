@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 import requests
 import os
 import base64
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 
