@@ -16,25 +16,32 @@ if not TELEGRAM_TOKEN:
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Основной webhook для Telegram"""
     try:
+        logging.info("🔔 WEBHOOK CALLED!")
         data = request.json
-        print("📨 Received Telegram update")
+        logging.info(f"📨 Update ID: {data.get('update_id')}")
         
-        # Проверяем есть ли фото
-        if 'message' in data and 'photo' in data['message']:
-            return jsonify({
-                "status": "success", 
-                "message": "Фото получено! Обработка будет добавлена."
-            })
-        else:
-            return jsonify({
-                "status": "success", 
-                "message": "Сообщение получено (не фото)"
-            })
+        # Проверяем токен
+        if not TELEGRAM_TOKEN or TELEGRAM_TOKEN == 'xxx':
+            logging.error("❌ ERROR: TELEGRAM_TOKEN not configured!")
+            return jsonify({"status": "error", "message": "Token not configured"}), 500
             
+        if 'message' in data:
+            user = data['message'].get('from', {})
+            logging.info(f"💬 Message from: {user.get('first_name')} (ID: {user.get('id')})")
+            
+            if 'photo' in data['message']:
+                logging.info("🖼️ Photo received!")
+                return jsonify({"status": "success", "message": "Photo received!"})
+            else:
+                text = data['message'].get('text', '')
+                logging.info(f"📝 Text: {text}")
+                return jsonify({"status": "success", "message": f"Text received: {text}"})
+        
+        return jsonify({"status": "success"})
+        
     except Exception as e:
-        print("❌ Error:", e)
+        logging.error(f"❌ Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
