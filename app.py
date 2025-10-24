@@ -18,23 +18,18 @@ DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
 # ↓ ДОБАВИТЬ ЭТУ ФУНКЦИЮ ПРЯМО ЗДЕСЬ ↓
 def resize_image(image_bytes, max_size=(800, 800)):
     """Уменьшаем размер изображения"""
+  def resize_image(image_bytes, max_size=(800, 800)):
+    """Простая заглушка для уменьшения размера"""
     try:
-        # Открываем изображение
-        image = Image.open(io.BytesIO(image_bytes))
-        
-        # Уменьшаем размер
-        image.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # Конвертируем обратно в bytes
-        output = io.BytesIO()
-        image.save(output, format='JPEG', quality=85, optimize=True)
-        
-        logging.info(f"📐 Image resized: {len(image_bytes)} -> {len(output.getvalue())} bytes")
-        return output.getvalue()
+        # Пока просто возвращаем оригинал
+        # TODO: добавить реальное сжатие когда установится Pillow
+        if len(image_bytes) > 500000:  # Если больше 500KB
+            logging.warning("⚠️ Image is too large, but Pillow not available")
+        return image_bytes
         
     except Exception as e:
         logging.error(f"❌ Image resize error: {e}")
-        return image_bytes  # Возвращаем оригинал если ошибка
+        return image_bytes
 
 def download_telegram_file(file_id):
     """Скачиваем файл из Telegram"""
