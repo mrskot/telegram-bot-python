@@ -4,15 +4,114 @@ import os
 import base64
 import logging
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 
 # Конфигурация
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY', 'sk-8f3a7976db454796890e1fb2c4c38553')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-if not TELEGRAM_TOKEN:
-    print("❌ TELEGRAM_BOT_TOKEN not set!")
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+
+def download_telegram_file(file_id):
+    """Скачиваем файл из Telegram"""
+    try:
+        logging.info(f"📥 Downloading file: {file_id}")
+        
+        # 1. Получаем file_path
+        file_info_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getFile"
+        file_info_response = requests.post(file_info_url, json={"file_id": file_id})
+        file_info = file_info_response.json()
+        
+        if not file_info['ok']:
+            logging.error(f"❌ File info error: {file_info}")
+            return None
+            
+        file_path = file_info['result']['file_path']
+        logging.info(f"📁 File path: {file_path}")
+        
+        # 2. Скачиваем файл
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+        file_response = requests.get(file_url)
+        
+        if file_response.status_code == 200:
+            logging.info(f"✅ File downloaded, size: {len(file_response.content)} bytes")
+            return file_response.content
+        else:
+            logging.error(f"❌ Download failed: {file_response.status_code}")
+            return None
+            
+    except Exception as e:
+        logging.error(f"❌ Download error: {e}")
+        return None
+
+def process_with_deepseek(image_bytes):
+    """Отправляем фото в DeepSeek API"""
+    try:
+        logging.info("🔄 Sending to DeepSeek API...")
+        
+        # Кодируем в base64
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Отправляем в DeepSeek
+        deepseek_response = requests.post(
+            'https://api.deepseek.com/chat/completions',
+            headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}'},
+            json={
+                'model': 'deepseek-chat',
+                'messages': [{
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': 'Распознай документ и верни ТОЛЬКО JSON: {"участок":"значение","изделие":"значение","номер":"значение","дата":"значение"}. Если поле не найдено - null.'
+                        },
+                        {
+                            'type': 'image_url',
+                            'image_url': {
+                                'url': f'data:image/jpeg;base64,{base64_image}'
+                            }
+                        }
+                    ]
+                }],
+                'temperature': 0.1,
+                'max_tokens': 1000
+            }
+        )
+        
+        if deepseek_response.status_code == 200:
+            result = deepseek_response.json()
+            logging.info(f"✅ DeepSeek response received")
+            
+            # Извлекаем текст ответа
+            if 'choices' in result and len(result['choices']) > 0:
+                message_content = result['choices'][0]['message']['content']
+                logging.info(f"📄 DeepSeek content: {message_content}")
+                return message_content
+            else:
+                logging.error(f"❌ No choices in DeepSeek response: {result}")
+                return None
+        else:
+            logging.error(f"❌ DeepSeek API error: {deepseek_response.status_code} - {deepseek_response.text}")
+            return None
+            
+    except Exception as e:
+        logging.error(f"❌ DeepSeek processing error: {e}")
+        return None
+
+def send_telegram_message(chat_id, text):
+    """Отправляем сообщение обратно в Telegram"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            'chat_id': chat_id,
+            'text': text
+        }
+        response = requests.post(url, json=payload)
+        return response.json()
+    except Exception as e:
+        logging.error(f"❌ Telegram send error: {e}")
+        return None
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -21,54 +120,63 @@ def webhook():
         data = request.json
         
         if 'message' in data:
-            user = data['message'].get('from', {})
-            logging.info(f"💬 Message from: {user.get('first_name')} (ID: {user.get('id')})")
+            chat_id = data['message']['chat']['id']
+            user_name = data['message']['from'].get('first_name', 'User')
             
             if 'photo' in data['message']:
-                logging.info("🖼️ Photo received!")
+                logging.info(f"🖼️ Photo from {user_name}")
                 
-                # Получаем самую большую версию фото (последнюю в массиве)
+                # Получаем file_id самого большого фото
                 photo = data['message']['photo'][-1]
                 file_id = photo['file_id']
                 logging.info(f"📸 File ID: {file_id}")
                 
-                # Здесь будет логика скачивания и обработки фото
-                return jsonify({
-                    "status": "success", 
-                    "message": "Фото получено! Обработка будет добавлена.",
-                    "file_id": file_id
-                })
-                
+                # Скачиваем фото
+                image_data = download_telegram_file(file_id)
+                if image_data:
+                    # Отправляем в DeepSeek
+                    deepseek_result = process_with_deepseek(image_data)
+                    
+                    if deepseek_result:
+                        # Отправляем результат пользователю
+                        send_telegram_message(chat_id, f"✅ Документ распознан:\n{deepseek_result}")
+                        return jsonify({"status": "success", "message": "Фото обработано"})
+                    else:
+                        send_telegram_message(chat_id, "❌ Ошибка распознавания документа")
+                        return jsonify({"status": "error", "message": "DeepSeek processing failed"})
+                else:
+                    send_telegram_message(chat_id, "❌ Не удалось загрузить фото")
+                    return jsonify({"status": "error", "message": "File download failed"})
             else:
                 text = data['message'].get('text', '')
-                logging.info(f"📝 Text: {text}")
-                return jsonify({"status": "success", "message": f"Text: {text}"})
+                logging.info(f"💬 Text from {user_name}: {text}")
+                send_telegram_message(chat_id, f"📝 Вы написали: {text}\nОтправьте фото документа для распознавания.")
+                return jsonify({"status": "success", "message": "Text processed"})
         
         return jsonify({"status": "success"})
         
     except Exception as e:
-        logging.error(f"❌ Error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logging.error(f"❌ Webhook error: {e}")
+        return jsonify({"status": "error"}), 200
+
 @app.route('/health', methods=['GET'])
 def health():
-    """Проверка работы сервера"""
     return jsonify({
         "status": "running", 
         "message": "🚀 Telegram Bot is running!",
         "version": "1.0"
     })
 
-@app.route('/test', methods=['GET'])
-def test():
-    """Тестовая страница"""
-    return """
-    <h1>Telegram Bot</h1>
+@app.route('/')
+def home():
+    return '''
+    <h1>🤖 Telegram Document Recognition Bot</h1>
     <p>Сервер работает корректно!</p>
     <ul>
         <li><a href="/health">Health Check</a></li>
         <li>Webhook: POST /webhook</li>
     </ul>
-    """
+    '''
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
